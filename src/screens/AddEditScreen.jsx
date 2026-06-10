@@ -41,12 +41,21 @@ export default function AddEditScreen() {
       payment_amount: Number(amount),
       date,
       method_of_payment: method,
+<<<<<<< HEAD
     }
     if (method === 'M-Pesa' && mpesaCode) payload.mpesa_code = mpesaCode
     if (method === 'Cheque' && chequeNo) payload.cheque_no = chequeNo
     if (method === 'Cheque' && chequeDate) payload.cheque_date = chequeDate
     if (method === 'Bank Transfer' && bankName) payload.bank_name = bankName
     if (method === 'Bank Transfer' && bankDate) payload.bank_date = bankDate
+=======
+      mpesa_code: method === 'M-Pesa' ? mpesaCode : null,
+      cheque_no: method === 'Cheque' ? chequeNo : null,
+      cheque_date: method === 'Cheque' ? chequeDate : null,
+      bank_name: method === 'Bank Transfer' ? bankName : null,
+      bank_date: method === 'Bank Transfer' ? bankDate : null,
+    }
+>>>>>>> 08c92c245cf48a7baadf33e1b460ebf62857f1c4
     let error
     if (isEdit) {
       ({ error } = await supabase.from('saisambu_payments').update(payload).eq('id', existing.id))
