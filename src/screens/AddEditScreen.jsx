@@ -281,4 +281,3 @@ const s = {
   saveBtn: { width: '100%', borderRadius: 12, padding: 15, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: 'none', marginBottom: 10 },
   cancelBtn: { width: '100%', borderRadius: 12, padding: 13, fontWeight: 600, fontSize: 14, cursor: 'pointer' },
 }
-Add invoice linking
