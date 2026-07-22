@@ -1,13 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Payment Tracker DB
+// Unified DB: saisambu_payments now lives in the same project as invoices/clients
 export const supabase = createClient(
-  'https://xkhtdlconhewefftaatf.supabase.co',
-  'sb_publishable_eFSdpDef041urzcK4Vl3Yg_4O-c_g7G'
-)
-
-// Invoice Manager DB (read-only for reports)
-export const invoiceDb = createClient(
   'https://idtgdvfplupwxaihsavz.supabase.co',
   'sb_publishable_TXqLGVZci-cQjW0SeR-EkA_0gAQRv2D'
 )
+
+// Invoice Manager DB (same project — kept as a separate export so screens using invoiceDb still work)
+export const invoiceDb = supabase
