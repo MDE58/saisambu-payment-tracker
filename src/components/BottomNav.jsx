@@ -3,11 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useTheme } from '../lib/ThemeContext'
 
 const tabs = [
-  { path: '/',        label: 'Home',     icon: '⊞' },
-  { path: '/payments',label: 'Payments', icon: '💳' },
-  { path: '/receipts',label: 'Receipts', icon: '🧾' },
-  { path: '/reports', label: 'Reports',  icon: '📊' },
-  { path: '/settings',label: 'Settings', icon: '⚙️' },
+  { path: '/',         label: 'Home',     icon: '⊞' },
+  { path: '/invoices', label: 'Invoices', icon: '📄' },
+  { path: '/payments', label: 'Payments', icon: '💳' },
+  { path: '/reports',  label: 'Reports',  icon: '📊' },
+  { path: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 
 export default function BottomNav() {

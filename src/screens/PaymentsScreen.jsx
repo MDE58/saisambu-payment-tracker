@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, invoiceDb } from '../lib/supabase'
 import { useTheme } from '../lib/ThemeContext'
-import { fmt, fmtShort, formatDate, METHODS, METHOD_COLORS } from '../lib/theme'
+import { fmt, fmtShort, formatDate, METHODS, METHOD_COLORS, METHOD_FROM_DB, METHOD_TO_DB } from '../lib/theme'
 import BottomNav from '../components/BottomNav'
 
 export default function PaymentsScreen() {
@@ -20,12 +20,17 @@ export default function PaymentsScreen() {
   async function fetchAll() {
     setLoading(true)
     const [paymentsRes, invoicesRes, clientsRes] = await Promise.all([
-      supabase.from('saisambu_payments').select('*').order('date', { ascending: false }),
+      supabase.from('payments').select('*').order('payment_date', { ascending: false }),
       invoiceDb.from('invoices').select('*'),
       invoiceDb.from('clients').select('*'),
     ])
 
-    const payments = paymentsRes.data || []
+    const payments = (paymentsRes.data || []).map(p => ({
+      ...p,
+      method_of_payment: METHOD_FROM_DB[p.payment_method] || 'Other',
+      payment_amount: p.amount,
+      date: p.payment_date,
+    }))
     const invoices = invoicesRes.data || []
     const clients = clientsRes.data || []
 
@@ -52,7 +57,7 @@ export default function PaymentsScreen() {
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this payment?')) return
-    await supabase.from('saisambu_payments').delete().eq('id', id)
+    await supabase.from('payments').delete().eq('id', id)
     fetchAll()
   }
 

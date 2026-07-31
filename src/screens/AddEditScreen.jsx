@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase, invoiceDb } from '../lib/supabase'
 import { useTheme } from '../lib/ThemeContext'
-import { METHODS, today, formatDate, fmtShort, fmt } from '../lib/theme'
+import { METHODS, METHOD_TO_DB, today, formatDate, fmtShort, fmt } from '../lib/theme'
 
 export default function AddEditScreen() {
   const navigate = useNavigate()
@@ -14,9 +14,11 @@ export default function AddEditScreen() {
   const isEdit = !!existing
 
   const [client, setClient] = useState(existing?.client || prefill?.client || '')
-  const [amount, setAmount] = useState(existing?.payment_amount?.toString() || '')
-  const [date, setDate] = useState(existing?.date || today())
-  const [method, setMethod] = useState(existing?.method_of_payment || 'M-Pesa')
+  const [amount, setAmount] = useState(existing?.amount?.toString() || '')
+  const [date, setDate] = useState(existing?.payment_date || today())
+  const [method, setMethod] = useState(
+    existing ? (METHODS.find(m => METHOD_TO_DB[m] === existing.payment_method) || 'M-Pesa') : 'M-Pesa'
+  )
   const [mpesaCode, setMpesaCode] = useState(existing?.mpesa_code || '')
   const [chequeNo, setChequeNo] = useState(existing?.cheque_no || '')
   const [chequeDate, setChequeDate] = useState(existing?.cheque_date || '')
@@ -71,9 +73,9 @@ export default function AddEditScreen() {
 
     const payload = {
       client: client.trim(),
-      payment_amount: Number(amount),
-      date,
-      method_of_payment: method,
+      amount: Number(amount),
+      payment_date: date,
+      payment_method: METHOD_TO_DB[method] || 'other',
     }
     if (method === 'M-Pesa' && mpesaCode) payload.mpesa_code = mpesaCode
     if (method === 'Cheque' && chequeNo) payload.cheque_no = chequeNo
@@ -84,9 +86,9 @@ export default function AddEditScreen() {
 
     let error
     if (isEdit) {
-      ({ error } = await supabase.from('saisambu_payments').update(payload).eq('id', existing.id))
+      ({ error } = await supabase.from('payments').update(payload).eq('id', existing.id))
     } else {
-      ({ error } = await supabase.from('saisambu_payments').insert(payload))
+      ({ error } = await supabase.from('payments').insert(payload))
     }
 
     if (error) {
@@ -95,15 +97,16 @@ export default function AddEditScreen() {
       return
     }
 
-    // If linked to an invoice, reduce its balance / increase amount_paid
+    // If linked to an invoice, reduce its balance / increase amount_paid (fetch fresh to avoid stale state)
     if (selectedInvoiceId && !isEdit) {
-      const invoice = clientInvoices.find(inv => inv.id === selectedInvoiceId)
+      const { data: invoice } = await invoiceDb.from('invoices').select('amount_paid, total').eq('id', selectedInvoiceId).single()
       if (invoice) {
         const newPaid = Number(invoice.amount_paid || 0) + Number(amount)
         const newBalance = Math.max(0, Number(invoice.total || 0) - newPaid)
         await invoiceDb.from('invoices').update({
           amount_paid: newPaid,
           balance: newBalance,
+          status: newBalance <= 0 ? 'paid' : 'partial',
         }).eq('id', selectedInvoiceId)
       }
     }

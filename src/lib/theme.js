@@ -24,6 +24,22 @@ export const LIGHT = {
 
 export const METHODS = ['M-Pesa', 'Bank Transfer', 'Cheque', 'Cash', 'Other']
 
+// Maps display labels to the DB's payments.payment_method check-constraint values
+export const METHOD_TO_DB = {
+  'M-Pesa': 'mpesa',
+  'Bank Transfer': 'bank_transfer',
+  'Cheque': 'cheque',
+  'Cash': 'cash',
+  'Other': 'other',
+}
+export const METHOD_FROM_DB = {
+  mpesa: 'M-Pesa',
+  bank_transfer: 'Bank Transfer',
+  cheque: 'Cheque',
+  cash: 'Cash',
+  other: 'Other',
+}
+
 export const METHOD_COLORS = (t) => ({
   'M-Pesa':        { bg: t.greenBg,  text: t.green  },
   'Bank Transfer': { bg: t.blueBg,   text: t.blue   },

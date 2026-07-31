@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/ThemeContext'
-import { fmt, fmtShort, formatDate, METHOD_COLORS } from '../lib/theme'
+import { fmt, fmtShort, formatDate, METHOD_COLORS, METHOD_FROM_DB } from '../lib/theme'
 import BottomNav from '../components/BottomNav'
 
 export default function HomeScreen() {
@@ -15,8 +15,13 @@ export default function HomeScreen() {
 
   async function fetchRecords() {
     setLoading(true)
-    const { data } = await supabase.from('saisambu_payments').select('*').order('date', { ascending: false }).limit(5)
-    setRecords(data || [])
+    const { data } = await supabase.from('payments').select('*').order('payment_date', { ascending: false }).limit(5)
+    setRecords((data || []).map(p => ({
+      ...p,
+      method_of_payment: METHOD_FROM_DB[p.payment_method] || 'Other',
+      payment_amount: p.amount,
+      date: p.payment_date,
+    })))
     setLoading(false)
   }
 
@@ -84,10 +89,10 @@ export default function HomeScreen() {
           <div style={{ fontSize: 11, fontWeight: 700, color: t.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 }}>Quick Actions</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             {[
-              { label: 'New Payment', icon: '+', color: t.orange, action: () => navigate('/add-edit') },
-              { label: 'All Payments', icon: '💳', color: t.blue, action: () => navigate('/payments') },
-              { label: 'Receipts', icon: '🧾', color: t.green, action: () => navigate('/receipts') },
-              { label: 'Reports', icon: '📊', color: t.purple, action: () => navigate('/reports') },
+              { label: 'New Invoice', icon: '📄', color: t.orange, action: () => navigate('/invoice-edit') },
+              { label: 'New Payment', icon: '💳', color: t.blue, action: () => navigate('/add-edit') },
+              { label: 'Clients', icon: '👥', color: t.green, action: () => navigate('/clients') },
+              { label: 'Receipts', icon: '🧾', color: t.purple, action: () => navigate('/receipts') },
             ].map(item => (
               <button key={item.label} onClick={item.action} style={{ ...s.actionBtn, background: t.card, border: `1px solid ${t.border}` }}>
                 <div style={{ ...s.actionIcon, background: item.color + '22' }}>

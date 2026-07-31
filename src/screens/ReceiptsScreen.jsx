@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../lib/ThemeContext'
-import { fmt, formatDate, genReceiptNo } from '../lib/theme'
+import { fmt, formatDate, genReceiptNo, METHOD_FROM_DB } from '../lib/theme'
 import { LOGO_B64 } from '../lib/logoBase64'
 import BottomNav from '../components/BottomNav'
 
@@ -28,8 +28,13 @@ export default function ReceiptsScreen() {
 
   async function fetchRecords() {
     setLoading(true)
-    const { data } = await supabase.from('saisambu_payments').select('*').order('date', { ascending: false })
-    setRecords(data || [])
+    const { data } = await supabase.from('payments').select('*').order('payment_date', { ascending: false })
+    setRecords((data || []).map(p => ({
+      ...p,
+      method_of_payment: METHOD_FROM_DB[p.payment_method] || 'Other',
+      payment_amount: p.amount,
+      date: p.payment_date,
+    })))
     setLoading(false)
   }
 

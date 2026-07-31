@@ -1,0 +1,192 @@
+import React, { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { invoiceDb } from '../lib/supabase'
+import { useTheme } from '../lib/ThemeContext'
+import { fmt, today } from '../lib/theme'
+
+const genInvoiceNo = () => {
+  const now = new Date()
+  return `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random() * 900 + 100)}`
+}
+
+export default function InvoiceEditScreen() {
+  const navigate = useNavigate()
+  const { state } = useLocation()
+  const { t } = useTheme()
+  const existing = state?.invoice || null
+  const isEdit = !!existing
+
+  const [clients, setClients] = useState([])
+  const [clientId, setClientId] = useState(existing?.client_id || '')
+  const [invoiceNumber] = useState(existing?.invoice_number || genInvoiceNo())
+  const [date, setDate] = useState(existing?.date || today())
+  const [dueDate, setDueDate] = useState(existing?.due_date || '')
+  const [vatExempt, setVatExempt] = useState(existing?.vat_exempt || false)
+  const [notes, setNotes] = useState(existing?.notes || '')
+  const [items, setItems] = useState([{ description: '', quantity: 1, unit_price: '' }])
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { fetchClients() }, [])
+  useEffect(() => { if (isEdit) fetchItems() }, [])
+
+  async function fetchClients() {
+    const { data } = await invoiceDb.from('clients').select('id, name').order('name')
+    setClients(data || [])
+    setLoading(false)
+  }
+
+  async function fetchItems() {
+    const { data } = await invoiceDb.from('invoice_items').select('*').eq('invoice_id', existing.id)
+    if (data && data.length) {
+      setItems(data.map(it => ({ id: it.id, description: it.description, quantity: it.quantity, unit_price: it.unit_price, service_type: it.service_type })))
+    }
+  }
+
+  function updateItem(i, key, val) {
+    const next = [...items]
+    next[i] = { ...next[i], [key]: val }
+    setItems(next)
+  }
+  function addItem() { setItems([...items, { description: '', quantity: 1, unit_price: '' }]) }
+  function removeItem(i) { setItems(items.filter((_, idx) => idx !== i)) }
+
+  const subtotal = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
+  const vatAmount = vatExempt ? 0 : subtotal * 0.16
+  const total = subtotal + vatAmount
+
+  async function handleSave() {
+    if (!clientId) { alert('Please select a client'); return }
+    if (!items.some(it => it.description.trim())) { alert('Add at least one line item'); return }
+    setSaving(true)
+
+    const payload = {
+      client_id: clientId,
+      invoice_number: invoiceNumber,
+      date,
+      due_date: dueDate || null,
+      subtotal,
+      vat_amount: vatAmount,
+      total,
+      vat_exempt: vatExempt,
+      notes,
+      updated_at: new Date().toISOString(),
+    }
+
+    let invoiceId = existing?.id
+    if (isEdit) {
+      const { error } = await invoiceDb.from('invoices').update(payload).eq('id', invoiceId)
+      if (error) { setSaving(false); alert('Error: ' + error.message); return }
+      await invoiceDb.from('invoice_items').delete().eq('invoice_id', invoiceId)
+    } else {
+      const newBalance = total
+      const { data, error } = await invoiceDb.from('invoices').insert({
+        ...payload, status: 'draft', amount_paid: 0, balance: newBalance,
+      }).select().single()
+      if (error) { setSaving(false); alert('Error: ' + error.message); return }
+      invoiceId = data.id
+    }
+
+    const itemRows = items.filter(it => it.description.trim()).map(it => ({
+      invoice_id: invoiceId,
+      description: it.description,
+      service_type: it.service_type || null,
+      quantity: Number(it.quantity) || 1,
+      unit_price: Number(it.unit_price) || 0,
+      amount: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+    }))
+    const { error: itemsError } = await invoiceDb.from('invoice_items').insert(itemRows)
+
+    setSaving(false)
+    if (itemsError) { alert('Invoice saved but items failed: ' + itemsError.message); return }
+    navigate('/invoices')
+  }
+
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: t.textMuted, background: t.bg, minHeight: '100vh' }}>Loading...</div>
+
+  return (
+    <div style={{ minHeight: '100vh', fontFamily: 'Inter, sans-serif', background: t.bg, color: t.text }}>
+      <div style={{ padding: '48px 16px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: t.surface, borderBottom: `1px solid ${t.border}` }}>
+        <button onClick={() => navigate(-1)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: t.text }}>←</button>
+        <span style={{ fontSize: 17, fontWeight: 800 }}>{isEdit ? 'Edit Invoice' : 'New Invoice'}</span>
+        <div style={{ width: 36 }} />
+      </div>
+
+      <div style={{ padding: '20px 16px', paddingBottom: 60 }}>
+        <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 16 }}>Invoice No: <b style={{ color: t.orange }}>{invoiceNumber}</b></div>
+
+        <label style={lbl(t)}>CLIENT</label>
+        <select value={clientId} onChange={e => setClientId(e.target.value)} style={{ ...inputStyle(t), marginBottom: 16, appearance: 'auto' }}>
+          <option value="">Select a client...</option>
+          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={lbl(t)}>DATE</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...inputStyle(t), marginBottom: 16 }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={lbl(t)}>DUE DATE</label>
+            <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={{ ...inputStyle(t), marginBottom: 16 }} />
+          </div>
+        </div>
+
+        <label style={lbl(t)}>LINE ITEMS</label>
+        {items.map((it, i) => (
+          <div key={i} style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+            <input placeholder="Description" value={it.description}
+              onChange={e => updateItem(i, 'description', e.target.value)}
+              style={{ ...inputStyle(t), marginBottom: 8 }} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="number" placeholder="Qty" value={it.quantity}
+                onChange={e => updateItem(i, 'quantity', e.target.value)}
+                style={{ ...inputStyle(t), width: 70 }} />
+              <input type="number" placeholder="Unit price" value={it.unit_price}
+                onChange={e => updateItem(i, 'unit_price', e.target.value)}
+                style={{ ...inputStyle(t), flex: 1 }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: t.orange, minWidth: 70, textAlign: 'right' }}>
+                {fmt((Number(it.quantity) || 0) * (Number(it.unit_price) || 0))}
+              </span>
+              {items.length > 1 && (
+                <button onClick={() => removeItem(i)} style={{ background: 'none', border: 'none', color: t.red, cursor: 'pointer', fontSize: 16 }}>✕</button>
+              )}
+            </div>
+          </div>
+        ))}
+        <button onClick={addItem} style={{ width: '100%', padding: 10, borderRadius: 10, border: `1px dashed ${t.border}`, background: 'none', color: t.orange, fontWeight: 700, cursor: 'pointer', marginBottom: 16 }}>
+          + Add line item
+        </button>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, cursor: 'pointer' }}>
+          <input type="checkbox" checked={vatExempt} onChange={e => setVatExempt(e.target.checked)} />
+          <span style={{ fontSize: 12, color: t.textMuted }}>VAT Exempt</span>
+        </label>
+
+        <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+            <span style={{ color: t.textMuted }}>Subtotal</span><span>KES {fmt(subtotal)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+            <span style={{ color: t.textMuted }}>VAT (16%)</span><span>KES {fmt(vatAmount)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 900, paddingTop: 8, borderTop: `1px solid ${t.border}` }}>
+            <span>Total</span><span style={{ color: t.orange }}>KES {fmt(total)}</span>
+          </div>
+        </div>
+
+        <label style={lbl(t)}>NOTES</label>
+        <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+          style={{ ...inputStyle(t), marginBottom: 20, resize: 'vertical' }} />
+
+        <button onClick={handleSave} disabled={saving}
+          style={{ width: '100%', borderRadius: 12, padding: 15, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: 'none', background: saving ? t.textMuted : t.orange, opacity: saving ? 0.7 : 1 }}>
+          {saving ? 'Saving...' : isEdit ? '✓ Update Invoice' : '💾 Save Invoice'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const lbl = (t) => ({ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8, color: t.textMuted })
+const inputStyle = (t) => ({ width: '100%', borderRadius: 10, padding: '12px 14px', fontSize: 14, outline: 'none', boxSizing: 'border-box', background: t.card, border: `1px solid ${t.border}`, color: t.text })

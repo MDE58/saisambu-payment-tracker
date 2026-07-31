@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useTheme } from '../lib/ThemeContext'
 import { supabase, invoiceDb } from '../lib/supabase'
-import { fmt, formatDate, today } from '../lib/theme'
+import { fmt, formatDate, today, METHOD_FROM_DB } from '../lib/theme'
 import { LOGO_B64 } from '../lib/logoBase64'
 import BottomNav from '../components/BottomNav'
 
@@ -103,11 +103,16 @@ export default function ReportsScreen() {
   async function fetchAll() {
     setLoading(true)
     const [p, inv, cl] = await Promise.all([
-      supabase.from('saisambu_payments').select('*').order('date', { ascending: false }),
+      supabase.from('payments').select('*').order('payment_date', { ascending: false }),
       invoiceDb.from('invoices').select('*').order('date', { ascending: false }),
       invoiceDb.from('clients').select('*').order('name'),
     ])
-    setPayments(p.data || [])
+    setPayments((p.data || []).map(x => ({
+      ...x,
+      method_of_payment: METHOD_FROM_DB[x.payment_method] || 'Other',
+      payment_amount: x.amount,
+      date: x.payment_date,
+    })))
     setInvoices(inv.data || [])
     setClients(cl.data || [])
     setLoading(false)
