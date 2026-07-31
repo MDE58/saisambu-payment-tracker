@@ -93,7 +93,6 @@ export default function InvoiceEditScreen() {
       service_type: it.service_type || null,
       quantity: Number(it.quantity) || 1,
       unit_price: Number(it.unit_price) || 0,
-      amount: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
     }))
     const { error: itemsError } = await invoiceDb.from('invoice_items').insert(itemRows)
 
