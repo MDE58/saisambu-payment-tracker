@@ -125,6 +125,23 @@ export default function InvoicesScreen() {
                 ) : (
                   <div style={{ fontSize: 11, color: t.green, fontWeight: 700, marginTop: 2 }}>✓ Paid</div>
                 )}
+
+                <div style={{ marginTop: 8 }}>
+                  <button onClick={async (e) => {
+                    e.stopPropagation()
+                    try {
+                      const resp = await fetch(`/api/invoices/${inv.id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+                      const data = await resp.json()
+                      if (!resp.ok) throw new Error(data?.error || 'Failed')
+                      alert('Invoice sent via WhatsApp')
+                    } catch (err) {
+                      console.error(err)
+                      alert('Failed to send invoice: ' + (err.message || err))
+                    }
+                  }} style={{ padding: '6px 8px', borderRadius: 6, cursor: 'pointer', background: t.orange, color: '#fff', border: 'none' }}>
+                    📤 Send
+                  </button>
+                </div>
               </div>
             </div>
           )
