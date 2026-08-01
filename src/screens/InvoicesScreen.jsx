@@ -37,7 +37,19 @@ export default function InvoicesScreen() {
     setLoading(false)
   }
 
-  const clientMap = {}
+  async function handleDelete(inv, e) {
+    e.stopPropagation()
+    const { count } = await invoiceDb.from('payments').select('id', { count: 'exact', head: true }).eq('invoice_id', inv.id)
+    const warning = count > 0
+      ? `This invoice has ${count} payment(s) recorded against it. Deleting it will unlink those payments (they'll remain in Payments but no longer show an invoice). Delete anyway?`
+      : `Delete invoice ${inv.invoice_number}? This cannot be undone.`
+    if (!window.confirm(warning)) return
+
+    await invoiceDb.from('payments').update({ invoice_id: null }).eq('invoice_id', inv.id)
+    await invoiceDb.from('invoice_items').delete().eq('invoice_id', inv.id)
+    await invoiceDb.from('invoices').delete().eq('id', inv.id)
+    fetchAll()
+  }
   clients.forEach(c => { clientMap[c.id] = c.name })
 
   const filtered = invoices.filter(inv => {
@@ -126,6 +138,10 @@ export default function InvoicesScreen() {
                   <div style={{ fontSize: 11, color: t.green, fontWeight: 700, marginTop: 2 }}>✓ Paid</div>
                 )}
               </div>
+              <button onClick={(e) => handleDelete(inv, e)}
+                style={{ width: 28, height: 28, borderRadius: 8, border: 'none', cursor: 'pointer', background: t.redBg, color: t.red, fontSize: 12, flexShrink: 0 }}>
+                🗑
+              </button>
             </div>
           )
         })}

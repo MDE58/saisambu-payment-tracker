@@ -2,7 +2,17 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { invoiceDb } from '../lib/supabase'
 import { useTheme } from '../lib/ThemeContext'
-import { fmt, today } from '../lib/theme'
+import { fmt, today, formatDate } from '../lib/theme'
+import { LOGO_B64 } from '../lib/logoBase64'
+
+const COMPANY = {
+  name: 'SAISAMBU SECURITY & CLEANING LIMITED',
+  address: 'P.O. Box 8-00200, Kericho, Kenya',
+  tel: '0722 528 977 | 0723 076 059',
+  email: 'saisambu6568@gmail.com',
+  kra: 'P052019204S',
+  motto: '"To Do Right & Just"',
+}
 
 const genInvoiceNo = () => {
   const now = new Date()
@@ -25,6 +35,7 @@ export default function InvoiceEditScreen() {
   const [notes, setNotes] = useState(existing?.notes || '')
   const [items, setItems] = useState([{ description: '', quantity: 1, unit_price: '' }])
   const [saving, setSaving] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { fetchClients() }, [])
@@ -99,6 +110,169 @@ export default function InvoiceEditScreen() {
     setSaving(false)
     if (itemsError) { alert('Invoice saved but items failed: ' + itemsError.message); return }
     navigate('/invoices')
+  }
+
+  async function buildInvoicePDF() {
+    const { jsPDF } = await import('jspdf')
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+    const W = 210
+    const margin = 18
+    const clientName = clients.find(c => c.id === clientId)?.name || 'Client'
+
+    doc.setFillColor(232, 130, 26)
+    doc.rect(0, 0, W, 2, 'F')
+    doc.addImage(LOGO_B64, 'JPEG', margin, 6, 24, 24)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(13)
+    doc.setTextColor(26, 58, 92)
+    doc.text(COMPANY.name, margin + 28, 13)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(100, 100, 100)
+    doc.text(COMPANY.address, margin + 28, 19)
+    doc.text(`Tel: ${COMPANY.tel}`, margin + 28, 24)
+    doc.text(`Email: ${COMPANY.email}`, margin + 28, 29)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(20)
+    doc.setTextColor(232, 130, 26)
+    doc.text('INVOICE', W - margin, 16, { align: 'right' })
+
+    doc.setFontSize(9)
+    doc.setTextColor(100, 100, 100)
+    doc.text(`No: ${invoiceNumber}`, W - margin, 23, { align: 'right' })
+    doc.text(`Date: ${formatDate(date)}`, W - margin, 29, { align: 'right' })
+
+    doc.setDrawColor(232, 130, 26)
+    doc.setLineWidth(0.5)
+    doc.line(margin, 34, W - margin, 34)
+
+    let y = 44
+    doc.setFillColor(240, 244, 248)
+    doc.roundedRect(margin, y, W - margin * 2, 20, 2, 2, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(120, 120, 120)
+    doc.text('BILLED TO', margin + 6, y + 7)
+    doc.setFontSize(13)
+    doc.setTextColor(26, 58, 92)
+    doc.text(clientName, margin + 6, y + 15)
+    if (dueDate) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(100, 100, 100)
+      doc.text(`Due: ${formatDate(dueDate)}`, W - margin - 6, y + 15, { align: 'right' })
+    }
+
+    y += 28
+    doc.setFillColor(26, 58, 92)
+    doc.roundedRect(margin, y, W - margin * 2, 9, 1, 1, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.5)
+    doc.setTextColor(255, 255, 255)
+    doc.text('DESCRIPTION', margin + 6, y + 6)
+    doc.text('QTY', margin + 105, y + 6)
+    doc.text('UNIT PRICE', margin + 130, y + 6)
+    doc.text('AMOUNT', W - margin - 6, y + 6, { align: 'right' })
+    y += 9
+
+    items.filter(it => it.description.trim()).forEach((it, i) => {
+      const rowAmount = (Number(it.quantity) || 0) * (Number(it.unit_price) || 0)
+      const even = i % 2 === 0
+      doc.setFillColor(even ? 248 : 255, even ? 250 : 255, even ? 252 : 255)
+      doc.rect(margin, y, W - margin * 2, 10, 'F')
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(60, 60, 60)
+      doc.text(it.description, margin + 6, y + 6.5, { maxWidth: 82 })
+      doc.text(String(it.quantity || 0), margin + 105, y + 6.5)
+      doc.text(fmt(it.unit_price || 0), margin + 130, y + 6.5)
+      doc.setFont('helvetica', 'bold')
+      doc.text(fmt(rowAmount), W - margin - 6, y + 6.5, { align: 'right' })
+      y += 10
+    })
+
+    y += 6
+    const boxX = W - margin - 80
+    const rows = [
+      ['Subtotal', fmt(subtotal)],
+      ...(!vatExempt ? [['VAT (16%)', fmt(vatAmount)]] : []),
+    ]
+    rows.forEach(([label, val]) => {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9.5)
+      doc.setTextColor(100, 100, 100)
+      doc.text(label, boxX, y)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(60, 60, 60)
+      doc.text(`KES ${val}`, W - margin - 6, y, { align: 'right' })
+      y += 7
+    })
+
+    y += 3
+    doc.setFillColor(232, 130, 26)
+    doc.roundedRect(boxX - 6, y, W - margin - boxX + 6, 14, 3, 3, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(11)
+    doc.setTextColor(255, 255, 255)
+    doc.text('TOTAL', boxX, y + 9.5)
+    doc.text(`KES ${fmt(total)}`, W - margin - 6, y + 9.5, { align: 'right' })
+
+    y += 26
+    if (notes) {
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(8.5)
+      doc.setTextColor(120, 120, 120)
+      doc.text('NOTES', margin, y)
+      y += 6
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(9)
+      doc.setTextColor(80, 80, 80)
+      doc.text(notes, margin, y, { maxWidth: W - margin * 2 })
+      y += 14
+    }
+
+    doc.setDrawColor(220, 220, 220)
+    doc.line(margin, 270, W - margin, 270)
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8.5)
+    doc.setTextColor(140, 140, 140)
+    doc.text(`KRA PIN: ${COMPANY.kra}  |  ${COMPANY.motto}`, W / 2, 277, { align: 'center' })
+    doc.text(`${COMPANY.email}  |  Kericho, Kenya`, W / 2, 283, { align: 'center' })
+    doc.setFillColor(232, 130, 26)
+    doc.rect(0, 294, W, 3, 'F')
+
+    const filename = `Saisambu-Invoice-${invoiceNumber}.pdf`
+    const blob = doc.output('blob')
+    return { blob, filename, doc }
+  }
+
+  async function downloadInvoicePDF() {
+    const { doc, filename } = await buildInvoicePDF()
+    doc.save(filename)
+  }
+
+  async function shareInvoicePDF() {
+    setSharing(true)
+    try {
+      const { blob, filename } = await buildInvoicePDF()
+      const file = new File([blob], filename, { type: 'application/pdf' })
+      const clientName = clients.find(c => c.id === clientId)?.name || 'Client'
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Saisambu Invoice', text: `Invoice ${invoiceNumber} for ${clientName} — KES ${fmt(total)}` })
+      } else {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url; a.download = filename; a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') alert('Could not share invoice: ' + err.message)
+    } finally {
+      setSharing(false)
+    }
   }
 
   if (loading) return <div style={{ padding: 60, textAlign: 'center', color: t.textMuted, background: t.bg, minHeight: '100vh' }}>Loading...</div>
@@ -177,6 +351,19 @@ export default function InvoiceEditScreen() {
         <label style={lbl(t)}>NOTES</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
           style={{ ...inputStyle(t), marginBottom: 20, resize: 'vertical' }} />
+
+        {isEdit && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+            <button onClick={shareInvoicePDF} disabled={sharing}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 13, borderRadius: 12, color: '#fff', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', background: '#25D366', opacity: sharing ? 0.7 : 1 }}>
+              {sharing ? 'Preparing...' : '📲 Share PDF'}
+            </button>
+            <button onClick={downloadInvoicePDF}
+              style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 13, borderRadius: 12, color: '#fff', fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer', background: t.blue }}>
+              📄 Download PDF
+            </button>
+          </div>
+        )}
 
         <button onClick={handleSave} disabled={saving}
           style={{ width: '100%', borderRadius: 12, padding: 15, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: 'none', background: saving ? t.textMuted : t.orange, opacity: saving ? 0.7 : 1 }}>

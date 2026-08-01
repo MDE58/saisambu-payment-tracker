@@ -57,6 +57,22 @@ export default function PaymentsScreen() {
 
   async function handleDelete(id) {
     if (!window.confirm('Delete this payment?')) return
+
+    // Reverse every invoice this payment was allocated to
+    const { data: allocs } = await invoiceDb.from('payment_allocations').select('invoice_id, amount').eq('payment_id', id)
+    for (const a of allocs || []) {
+      const { data: invoice } = await invoiceDb.from('invoices').select('amount_paid, total').eq('id', a.invoice_id).single()
+      if (invoice) {
+        const newPaid = Math.max(0, Number(invoice.amount_paid || 0) - Number(a.amount))
+        const newBalance = Math.max(0, Number(invoice.total || 0) - newPaid)
+        await invoiceDb.from('invoices').update({
+          amount_paid: newPaid,
+          balance: newBalance,
+          status: newBalance <= 0 ? 'paid' : (newPaid > 0 ? 'partial' : 'sent'),
+        }).eq('id', a.invoice_id)
+      }
+    }
+
     await supabase.from('payments').delete().eq('id', id)
     fetchAll()
   }
