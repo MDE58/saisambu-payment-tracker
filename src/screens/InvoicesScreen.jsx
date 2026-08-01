@@ -50,6 +50,7 @@ export default function InvoicesScreen() {
     await invoiceDb.from('invoices').delete().eq('id', inv.id)
     fetchAll()
   }
+  const clientMap = {}
   clients.forEach(c => { clientMap[c.id] = c.name })
 
   const filtered = invoices.filter(inv => {
