@@ -260,7 +260,7 @@ export default function InvoiceEditScreen() {
       const { blob, filename } = await buildInvoicePDF()
       const file = new File([blob], filename, { type: 'application/pdf' })
       const clientName = clients.find(c => c.id === clientId)?.name || 'Client'
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.share) {
         await navigator.share({ files: [file], title: 'Saisambu Invoice', text: `Invoice ${invoiceNumber} for ${clientName} — KES ${fmt(total)}` })
       } else {
         const url = URL.createObjectURL(blob)

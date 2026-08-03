@@ -187,7 +187,7 @@ export default function ReceiptsScreen() {
       const { blob, filename } = await buildReceiptPDF(r)
       const file = new File([blob], filename, { type: 'application/pdf' })
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      if (navigator.share) {
         await navigator.share({
           files: [file],
           title: 'Saisambu Payment Receipt',
