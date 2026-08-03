@@ -269,7 +269,19 @@ export default function InvoiceEditScreen() {
         URL.revokeObjectURL(url)
       }
     } catch (err) {
-      if (err.name !== 'AbortError') alert('Could not share invoice: ' + err.message)
+      // Some browsers/in-app webviews (e.g. WhatsApp's built-in browser) block file sharing —
+      // fall back to a plain download instead of showing an error, unless the user cancelled.
+      if (err.name !== 'AbortError') {
+        try {
+          const { blob, filename } = await buildInvoicePDF()
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url; a.download = filename; a.click()
+          URL.revokeObjectURL(url)
+        } catch (fallbackErr) {
+          alert('Could not generate the PDF: ' + fallbackErr.message)
+        }
+      }
     } finally {
       setSharing(false)
     }

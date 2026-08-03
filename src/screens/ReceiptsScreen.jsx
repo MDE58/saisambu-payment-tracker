@@ -206,8 +206,21 @@ export default function ReceiptsScreen() {
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
       }
     } catch (err) {
+      // Same fallback as invoices: some browsers/in-app webviews block file sharing.
       if (err.name !== 'AbortError') {
-        alert('Could not share receipt: ' + err.message)
+        try {
+          const { blob, filename } = await buildReceiptPDF(r)
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = filename
+          a.click()
+          URL.revokeObjectURL(url)
+          const msg = `🛡️ *${COMPANY.name}*\n${COMPANY.motto}\n\n🧾 *PAYMENT RECEIPT*\nClient: ${r.client}\nAmount: KES ${fmt(r.payment_amount)}\nMethod: ${r.method_of_payment}\nDate: ${formatDate(r.date)}\n\n_PDF receipt downloaded — please attach it manually in WhatsApp._`
+          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank')
+        } catch (fallbackErr) {
+          alert('Could not generate the PDF: ' + fallbackErr.message)
+        }
       }
     } finally {
       setSharing(false)
