@@ -14,10 +14,8 @@ const COMPANY = {
   motto: '"To Do Right & Just"',
 }
 
-const genInvoiceNo = () => {
-  const now = new Date()
-  return `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${Math.floor(Math.random() * 900 + 100)}`
-}
+// Note: invoice numbers are now generated atomically by the DB (next_invoice_number()),
+// not client-side, to guarantee true sequential numbering with no collision risk.
 
 export default function InvoiceEditScreen() {
   const navigate = useNavigate()
@@ -28,7 +26,7 @@ export default function InvoiceEditScreen() {
 
   const [clients, setClients] = useState([])
   const [clientId, setClientId] = useState(existing?.client_id || '')
-  const [invoiceNumber] = useState(existing?.invoice_number || genInvoiceNo())
+  const [invoiceNumber, setInvoiceNumber] = useState(existing?.invoice_number || '')
   const [date, setDate] = useState(existing?.date || today())
   const [dueDate, setDueDate] = useState(existing?.due_date || '')
   const [vatExempt, setVatExempt] = useState(existing?.vat_exempt || false)
@@ -40,6 +38,12 @@ export default function InvoiceEditScreen() {
 
   useEffect(() => { fetchClients() }, [])
   useEffect(() => { if (isEdit) fetchItems() }, [])
+  useEffect(() => { if (!isEdit) fetchNextInvoiceNumber() }, [])
+
+  async function fetchNextInvoiceNumber() {
+    const { data, error } = await invoiceDb.rpc('next_invoice_number')
+    if (!error && data) setInvoiceNumber(data)
+  }
 
   async function fetchClients() {
     const { data } = await invoiceDb.from('clients').select('id, name').order('name')
@@ -67,6 +71,7 @@ export default function InvoiceEditScreen() {
   const total = subtotal + vatAmount
 
   async function handleSave() {
+    if (!invoiceNumber) { alert('Still generating invoice number, please wait a second and try again.'); return }
     if (!clientId) { alert('Please select a client'); return }
     if (!items.some(it => it.description.trim())) { alert('Add at least one line item'); return }
     setSaving(true)
@@ -298,7 +303,7 @@ export default function InvoiceEditScreen() {
       </div>
 
       <div style={{ padding: '20px 16px', paddingBottom: 60 }}>
-        <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 16 }}>Invoice No: <b style={{ color: t.orange }}>{invoiceNumber}</b></div>
+        <div style={{ fontSize: 11, color: t.textMuted, marginBottom: 16 }}>Invoice No: <b style={{ color: t.orange }}>{invoiceNumber || 'Generating...'}</b></div>
 
         <label style={lbl(t)}>CLIENT</label>
         <select value={clientId} onChange={e => setClientId(e.target.value)} style={{ ...inputStyle(t), marginBottom: 16, appearance: 'auto' }}>
@@ -377,7 +382,7 @@ export default function InvoiceEditScreen() {
           </div>
         )}
 
-        <button onClick={handleSave} disabled={saving}
+        <button onClick={handleSave} disabled={saving || !invoiceNumber}
           style={{ width: '100%', borderRadius: 12, padding: 15, color: '#fff', fontWeight: 800, fontSize: 15, cursor: 'pointer', border: 'none', background: saving ? t.textMuted : t.orange, opacity: saving ? 0.7 : 1 }}>
           {saving ? 'Saving...' : isEdit ? '✓ Update Invoice' : '💾 Save Invoice'}
         </button>
